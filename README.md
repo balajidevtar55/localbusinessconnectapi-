@@ -1,1 +1,1 @@
-# localbusinessconnectapi-
+# LocalStoreConnectApi
