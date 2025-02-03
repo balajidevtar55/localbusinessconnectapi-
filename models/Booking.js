@@ -4,6 +4,8 @@ const bookingSchema = new mongoose.Schema(
   {
     bookingDetails: {
       type: mongoose.Schema.Types.Mixed, 
+      checkIn: { type: Date, required: true },
+      checkOut: { type: Date, required: true },
       required: false,
     },
   },

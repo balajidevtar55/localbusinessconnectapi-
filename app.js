@@ -8,6 +8,8 @@ require('dotenv').config({
     path: '.env'    // Specify path explicitly
   });
 require("./config/dbconnect")
+
+
 app.use(bodyParser.json());
 app.use(express.json()); 
 app.use(cors())
@@ -21,6 +23,7 @@ app.use('/api', require('./routes/postroute'));
 app.use('/api', require('./routes/booking'));
 app.use('/api', require('./routes/payment'));
 
+require("./utils/cronJob");
 
 
 
