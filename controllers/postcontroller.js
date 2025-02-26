@@ -154,7 +154,7 @@ const uploadPostImage = asyncHandler(async (req, res) => {
 
 const AddPost = asyncHandler(async (req, res) => {
   try {
-    const { postData, userId,category,isSubmit } = req.body;
+    const { postData, userId,category,isSubmit,step } = req.body;
 
     if (!userId || !postData) {
       return res.status(400).json({
@@ -189,6 +189,7 @@ const AddPost = asyncHandler(async (req, res) => {
         ...postData, // Overwrite with new fields from postData
       };
       dynamicPostDataEntry.isSubmit = isSubmit;
+      dynamicPostDataEntry.step = step;
       
       const updatedData = await dynamicPostDataEntry.save();
       res.status(200).json({
@@ -202,6 +203,7 @@ const AddPost = asyncHandler(async (req, res) => {
         createdBy: mongoose.Types.ObjectId(userId),
         category: mongoose.Types.ObjectId(category),
         isSubmit: isSubmit,
+        step:step,
         postData,
       });
     
