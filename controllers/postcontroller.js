@@ -6,7 +6,9 @@ const DynamicPostData = require('../models/Addpost');
 const { default: mongoose } = require('mongoose');
 const AWS = require('aws-sdk');
 const cloudinary = require('cloudinary');
-
+const jwt = require('jsonwebtoken');
+const businessowner = require('../models/businessowner');
+const redisClient = require('../config/redisClient');
 const s3 = new AWS.S3({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -78,6 +80,8 @@ const s3 = new AWS.S3({
 //     });
 //   }
 // });
+
+
 
 const uploadPostImage = asyncHandler(async (req, res) => {
   const { postId } = req.body;
@@ -181,7 +185,7 @@ const AddPost = asyncHandler(async (req, res) => {
       createdBy: mongoose.Types.ObjectId(userId),
       "postData.category._id": postData?.category?._id,
     });
-    
+
     if (dynamicPostDataEntry) { 
       // Update existing post
       dynamicPostDataEntry.postData = {
@@ -223,24 +227,58 @@ const AddPost = asyncHandler(async (req, res) => {
   } 
 });
 
-  const getPostData = asyncHandler(async (req, res) => {
-    try {
-     const { filterData } = req.body;
-      // Check if a post by this user already exists
-      const posts = await DynamicPostData.find(filterData).lean();
-  
-  
-        res.status(201).json({
-          message: 'Dynamic data stored successfully',
-          data: posts,
-        });
-    } catch (error) {
-      res.status(500).json({
-        message: 'Error storing dynamic data',
-        error: error.message,
+const getPostData = asyncHandler(async (req, res) => {
+  try {
+    const { filterData } = req.body;
+    
+    // Get logged-in user from request (populated by auth middleware)
+    const userId = req.userId;
+    
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized: No user ID found in token' });
+    }
+    
+    // Create a cache key based on the filter data and user ID
+    const cacheKey = `posts:${JSON.stringify(filterData)}:${userId}`;
+    
+    // Try to get data from Redis first
+    const cachedData = await redisClient.get(cacheKey);
+    
+    if (cachedData) {
+      // If cache hit, return the cached data
+      return res.status(200).json({ 
+        message: 'Dynamic data fetched successfully (from cache)',
+        data: JSON.parse(cachedData),
       });
     }
-  });
+    
+    // If cache miss, fetch from database
+    const posts = await DynamicPostData.find(filterData).lean();
+    
+    const updatedPosts = posts.map(post => ({
+      ...post,
+      isOwner: post.createdBy?.toString() === userId.toString(),
+    }));
+    
+    // Store the result in Redis with an expiration time (e.g., 1 hour)
+    await redisClient.set(
+      cacheKey,
+      JSON.stringify(updatedPosts),
+      'EX',
+      3600 // Cache expiry time in seconds (1 hour)
+    );
+    
+    res.status(200).json({
+      message: 'Dynamic data fetched successfully',
+      data: updatedPosts,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: 'Error fetching dynamic data',
+      error: error.message,
+    });
+  }
+});
 
   const deletePostData = asyncHandler(async (req, res) => {
     try {

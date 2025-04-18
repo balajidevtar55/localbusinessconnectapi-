@@ -1,6 +1,7 @@
 const fs = require('fs');
 const AWS = require('aws-sdk');
 const Category = require('../models/category');
+const redisClient = require('../config/redisClient');
 
 // Set up AWS S3
 AWS.config.update({
@@ -60,13 +61,54 @@ const categoryController = {
   },
   getCategory: async (req, res) => {
     try {
-
-      const newCategory= await Category.find();
-
-      res.status(201).json({ message: 'Category created successfully!', data: newCategory });
+      // Define cache key for categories
+      const cacheKey = 'all_categories';
+      
+      // Check if Redis is connected and try to get cached data
+      let categories;
+      if (redisClient.isReady) {
+        try {
+          const cachedData = await redisClient.get(cacheKey);
+          if (cachedData) {
+            // Return data from cache if available
+            categories = JSON.parse(cachedData);
+            return res.status(200).json({ 
+              message: 'Categories retrieved successfully from cache',
+              data: categories 
+            });
+          }
+        } catch (redisError) {
+          console.error('Redis get error:', redisError);
+          // Continue to database query if Redis fails
+        }
+      }
+      
+      // If no cache hit or Redis error, fetch from database
+      categories = await Category.find();
+      
+      // Store result in Redis if connected
+      if (redisClient.isReady) {
+        try {
+          await redisClient.set(
+            cacheKey,
+            JSON.stringify(categories),
+            { EX: 3600 } // Cache for 1 hour
+          );
+        } catch (redisError) {
+          console.error('Redis set error:', redisError);
+        }
+      }
+      
+      // Return the fetched data
+      res.status(200).json({ 
+        message: 'Categories retrieved successfully', 
+        data: categories 
+      });
     } catch (error) {
-      console.error('Error uploading category:', error);
-      res.status(500).json({ message: 'An error occurred while creating the category.' });
+      console.error('Error retrieving categories:', error);
+      res.status(500).json({ 
+        message: 'An error occurred while retrieving categories.' 
+      });
     }
   },
 
